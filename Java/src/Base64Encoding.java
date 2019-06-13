@@ -1,6 +1,13 @@
+import java.nio.ByteBuffer;
+
 public class Base64Encoding {
 
 	static char[] indexTable = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toCharArray();
+	
+	static byte[] revTable = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,62,0,0,0,63,52,53,54,55,56,57,58,59,60,61,0,0,0,0,0,0,
+            0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,0,0,0,0,0,
+            0,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,0,0,0,0,0};
 
 	static String largeData = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum mi purus,\n"
 			+ "mollis et pulvinar quis, elementum non felis. Ut bibendum dolor ut mauris tempus, euismod\n"
@@ -11,120 +18,66 @@ public class Base64Encoding {
 	
 	public static void main(String[] args) {		
 		System.out.println(encode("AAAAAAAAAAAA"));
-		System.out.println(decode(encode("123")));
-		System.out.println(decode(encode("1234")));
-		System.out.println(decode(encode("12345")));
-		System.out.println(decode(encode("123456")));
-		System.out.println(decode("QUJDYWJjMTIzWFlaeHl6"));
-		System.out.println(decode(encode("This is a string that will be encoded and then decoded. "
-				+ "If you can read this, my hand crafted algorithm is working swimingly... "
-				+ "Now for some non-Base64 characters: ~~~```<<<()()()$$$$$^^^^^@@@@@()()()>>>```~~~")));
+		System.out.println(encode("AAAAAAAAAAAAA"));
+		System.out.println(encode("AAAAAAAAAAAAAA"));
+		System.out.println(new String(decode(encode("123"))));
+		System.out.println(new String(decode(encode("1234"))));
+		System.out.println(new String(decode(encode("12345"))));
+		System.out.println(new String(decode(encode("123456"))));
+		System.out.println(new String(decode("QUJDYWJjMTIzWFlaeHl6")));
 		
-		
+		byte[] largeTest = null;
+
 		long timeStart = System.nanoTime();
-		
-		String largeTest = null;
-		for (int i = 0; i < 1000000; i++) {
-			largeTest = decode(encode(largeData));
-		} 
-		
+		for (int i = 0; i < 1000000; i++) largeTest = decode(encode(largeData)); 
 		long timeEnd = System.nanoTime();
 		
-		System.out.println(largeTest);
+		System.out.println(new String(largeTest));
 		
 		System.out.println("Total time in seconds: " + (timeEnd - timeStart)/1000000000.0);
 		
 	}
 	
-	public static String encode(String data) {
-		int datLen = data.length();
+	public static String encode(String str) { try { return encode(str.getBytes("UTF-8")); } catch (Exception e) { return e.toString(); } }
+
+	public static String encode(byte[] data) {
+		int datLen = data.length;
 		int remainder = datLen % 3;
 		int encLen = (datLen / 3) * 4 + (remainder != 0 ? 4 : 0);
 		StringBuffer buffer = new StringBuffer(encLen);
-		char[] chunkOut = new char[4];
-		char[] chunkIn = new char[3];
-		
-		for(int i = 0; i < (datLen - remainder); i += 3) {
-			data.getChars(i, i + 3, chunkIn, 0);
-			chunkOut[0] = indexTable[  chunkIn[0]>>>2 ];
-			chunkOut[1] = indexTable[ (chunkIn[0] & 0x03)<<4 | chunkIn[1]>>>4 ];
-			chunkOut[2] = indexTable[ (chunkIn[1] & 0x0F)<<2 | chunkIn[2]>>>6 ];
-			chunkOut[3] = indexTable[  chunkIn[2] & 0x3F ];
-			buffer.append(chunkOut);
+		int i;
+		for (i = 0; i < (datLen - remainder); i += 3) {
+			buffer.append(indexTable[  data[i]>>>2 ]);
+			buffer.append(indexTable[ (data[i] & 0x03)<<4 | data[i+1]>>>4 ]);
+			buffer.append(indexTable[ (data[i+1] & 0x0F)<<2 | data[i+2]>>>6 ]);
+			buffer.append(indexTable[  data[i+2] & 0x3F ]);
 		}
-		
-		if(remainder > 0) {
-			data.getChars(datLen - remainder, datLen, chunkIn, 0);
-			chunkOut = "====".toCharArray();
-			chunkOut[0] = indexTable[  chunkIn[0]>>>2 ];
-			if(remainder == 1) {
-				chunkOut[1] = indexTable[ (chunkIn[0] & 0x03)<<4 ];
-			}
-			else if (remainder == 2) {
-				chunkOut[1] = indexTable[ (chunkIn[0] & 0x03)<<4 | chunkIn[1]>>>4 ];
-				chunkOut[2] = indexTable[ (chunkIn[1] & 0x0F)<<2 ];
-			}
-			buffer.append(chunkOut);
-		}
-		
+
+		if (remainder == 1) buffer.append(new char[] { indexTable[ data[i]>>>2 ], indexTable[ (data[i] & 0x03)<<4 ], '=', '=' });
+		if (remainder == 2) buffer.append(new char[] { indexTable[ data[i]>>>2 ], indexTable[ (data[i] & 0x03)<<4 | data[i+1]>>>4 ], indexTable[ (data[i+1] & 0x0F)<<2 ], '='});
+
 		return buffer.toString();
 	}
 	
-	public static String decode(String encData) {
-		int encLen = encData.length();
-		int decLen;
-		int remainder;
-		char[] chunkIn = new char[4];
-		char[] chunkOut = new char[3];
-		
-		remainder = 0;
-		if(encData.charAt(encLen-1) == '=') {
-			remainder = 2;
-			if(encData.charAt(encLen-2) == '=') {
-				remainder = 1;
-			}
+	public static byte[] decode(String data) {
+		int encLen = data.length();
+		int remainder = data.charAt(encLen - 1) == '=' ? (data.charAt(encLen - 2) == '=' ? 1 : 2) : 0;
+		int decLen = (encLen * 3) / 4 - (3 - remainder) % 3;
+		int i;
+		ByteBuffer buffer = ByteBuffer.allocate(decLen);
+
+		for (i = 0; i < (encLen - 4); i += 4) {
+			buffer.put((byte)((revTable[data.charAt(i)]<<2) | (revTable[data.charAt(i+1)]>>>4)));
+			buffer.put((byte)(0xF0 & (revTable[data.charAt(i+1)]<<4) | 0x0F & (revTable[data.charAt(i+2)]>>>2)));
+			buffer.put((byte)(0xC0 & (revTable[data.charAt(i+2)]<<6) | 0x3F & (revTable[data.charAt(i+3)])));
 		}
-		decLen = ((encLen * 3) / 4) - (remainder > 0 ? (remainder == 2 ? 1 : 2) : 0);
-		
-		StringBuffer buffer = new StringBuffer(decLen);
-		
-		for(int i = 0; i < (encLen - 4); i += 4) {
-			encData.getChars(i, i + 4, chunkIn, 0);
-			chunkOut[0] = (char)((getIndexOf(chunkIn[0])<<2) | (getIndexOf(chunkIn[1])>>>4));
-			chunkOut[1] = (char)(0xF0 & (getIndexOf(chunkIn[1])<<4) | 0x0F & (getIndexOf(chunkIn[2])>>>2));
-			chunkOut[2] = (char)(0xC0 & (getIndexOf(chunkIn[2])<<6) | 0x3F & (getIndexOf(chunkIn[3])));
-			buffer.append(chunkOut);			
-		}
-		
-		encData.getChars(encLen - 4, encLen, chunkIn, 0);
-		switch(remainder) {
-		case 0: 
-			chunkOut[0] = (char)((getIndexOf(chunkIn[0])<<2) | (getIndexOf(chunkIn[1])>>>4));
-			chunkOut[1] = (char)(0xF0 & (getIndexOf(chunkIn[1])<<4) | 0x0F & (getIndexOf(chunkIn[2])>>>2));
-			chunkOut[2] = (char)(0xC0 & (getIndexOf(chunkIn[2])<<6) | 0x3F & (getIndexOf(chunkIn[3])));
-			buffer.append(chunkOut);
-			break;
-		case 1:
-			chunkOut[0] = (char)((getIndexOf(chunkIn[0])<<2) | (getIndexOf(chunkIn[1])>>>4));
-			buffer.append(chunkOut[0]);			
-			break;
-		case 2:
-			chunkOut[0] = (char)((getIndexOf(chunkIn[0])<<2) | (getIndexOf(chunkIn[1])>>>4));
-			chunkOut[1] = (char)(0xF0 & (getIndexOf(chunkIn[1])<<4) | 0x0F & (getIndexOf(chunkIn[2])>>>2));
-			buffer.append(chunkOut[0]);
-			buffer.append(chunkOut[1]);
-			break;
-		}
-		
-		return buffer.toString();
-	}
-	
-	private static int getIndexOf(char c) {
-		for(int i = 0; i < indexTable.length; i++) {
-			if(indexTable[i] == c)
-				return i;
-		}
-		return Integer.MIN_VALUE;
+		 
+		buffer.put((byte)((revTable[data.charAt(i)]<<2) | (revTable[data.charAt(i+1)]>>>4)));
+		if (remainder == 1) return buffer.array();
+		buffer.put((byte)(0xF0 & (revTable[data.charAt(i+1)]<<4) | 0x0F & (revTable[data.charAt(i+2)]>>>2)));
+		if (remainder == 2) return buffer.array();
+		buffer.put((byte)(0xC0 & (revTable[data.charAt(i+2)]<<6) | 0x3F & (revTable[data.charAt(i+3)])));
+		return buffer.array();
 	}
 
 }
